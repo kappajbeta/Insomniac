@@ -9,7 +9,7 @@
       <Value Profile="(Default)">3</Value>
     </Setting>
     <Setting Name="InputFrequency" Type="System.Int32" Scope="User">
-      <Value Profile="(Default)">60000</Value>
+      <Value Profile="(Default)">30000</Value>
     </Setting>
     <Setting Name="ErrorLog" Type="System.String" Scope="User">
       <Value Profile="(Default)">Error</Value>

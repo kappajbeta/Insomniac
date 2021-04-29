@@ -5,6 +5,8 @@
     <TargetFramework>netcoreapp3.1</TargetFramework>
     <UseWindowsForms>true</UseWindowsForms>
     <ApplicationIcon>Insomniac.ico</ApplicationIcon>
+    <StartupObject>Insomniac.Program</StartupObject>
+    <Version>1.1.0</Version>
   </PropertyGroup>
 
   <ItemGroup>

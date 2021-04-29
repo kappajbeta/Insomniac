@@ -1,7 +1,9 @@
-﻿using System;
+﻿using Microsoft.Win32;
+using System;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Windows.Forms;
 using Insomniac.Properties;
@@ -13,8 +15,8 @@ namespace Insomniac
     {
         private long idleTime = 0;
         private int lastInput = -1;
-        private Thread activityThread;
-        private Thread idleTimeThread;
+        private Thread showIdleTimeThread;
+        private Thread updateIdleTimeThread;
         private bool killThreads = false;
         private DateTime inputDate = DateTime.Now.AddDays(-1);
 
@@ -86,7 +88,7 @@ namespace Insomniac
             this.Location = new Point(workingArea.Right - Size.Width, workingArea.Bottom - Size.Height);
 
             lblInsomniac.Text = "00:00:00";
-
+            SystemEvents.SessionSwitch += SystemEvents_SessionSwitch;
             Settings.Default.ErrorLog = string.Empty;
 
             Settings.Default.Save();
@@ -102,12 +104,14 @@ namespace Insomniac
             ShowWindow(this);
             Application.DoEvents();
             StartShowIdleTimeThread();
-            StartHideIdleTimeThread();
             StartUpdateIdleTimeThread();
             Thread.Sleep(3000);
 
             lblInsomniac.Text = "00:00:00";
             this.Text = "Insomniac - Idle Time";
+            Process.GetCurrentProcess().PriorityBoostEnabled = false;
+            Process.GetCurrentProcess().ProcessorAffinity = (IntPtr)1;
+            Process.GetCurrentProcess().PriorityClass = ProcessPriorityClass.Idle;
             Settings.Default.ErrorLog += DateTime.Now.ToString() + " " + messageText + "\r\n";
         }
 
@@ -120,8 +124,8 @@ namespace Insomniac
             ShowWindow(this);
             Application.DoEvents();
 
-            while ((activityThread.IsAlive == true) ||
-                (idleTimeThread.IsAlive == true))
+            while ((showIdleTimeThread.IsAlive == true) ||
+                (updateIdleTimeThread.IsAlive == true))
             {
                 Thread.Sleep(1000);
             }
@@ -137,30 +141,22 @@ namespace Insomniac
         {
             ParameterizedThreadStart parametrizedThreadStart = new ParameterizedThreadStart(ShowIdleTime);
 
-            activityThread = new Thread(parametrizedThreadStart);
-            activityThread.IsBackground = true;
+            showIdleTimeThread = new Thread(parametrizedThreadStart);
+            showIdleTimeThread.IsBackground = true;
+            showIdleTimeThread.Priority = ThreadPriority.Lowest;
 
-            activityThread.Start(this);
-        }
-
-        public void StartHideIdleTimeThread()
-        {
-            ParameterizedThreadStart parametrizedThreadStart = new ParameterizedThreadStart(HideIdleTime);
-
-            activityThread = new Thread(parametrizedThreadStart);
-            activityThread.IsBackground = true;
-
-            activityThread.Start(this);
+            showIdleTimeThread.Start(this);
         }
 
         public void StartUpdateIdleTimeThread()
         {
             ParameterizedThreadStart parametrizedThreadStart = new ParameterizedThreadStart(UpdateIdleTime);
 
-            idleTimeThread = new Thread(parametrizedThreadStart);
-            idleTimeThread.IsBackground = true;
+            updateIdleTimeThread = new Thread(parametrizedThreadStart);
+            updateIdleTimeThread.IsBackground = true;
+            updateIdleTimeThread.Priority = ThreadPriority.Lowest;
 
-            idleTimeThread.Start(lblInsomniac);
+            updateIdleTimeThread.Start(this);
         }
 
         public void ShowWindow(Insomniac InsomniacForm)
@@ -171,7 +167,7 @@ namespace Insomniac
                 {
                     InsomniacForm.Invoke(new Action<Form>((formInstance) =>
                     {
-                        formInstance.TopMost = true;
+                        formInstance.ShowInTaskbar = true;
 
                         formInstance.Show();
                         formInstance.BringToFront();
@@ -179,12 +175,12 @@ namespace Insomniac
                         formInstance.Activate();
 
                         formInstance.Tag = true;
-                        formInstance.TopMost = false;
+                        formInstance.ShowInTaskbar = false;
                     }), InsomniacForm);
                 }
                 else
                 {
-                    InsomniacForm.TopMost = true;
+                    InsomniacForm.ShowInTaskbar = true;
 
                     InsomniacForm.Show();
                     InsomniacForm.BringToFront();
@@ -192,7 +188,7 @@ namespace Insomniac
                     InsomniacForm.Activate();
 
                     InsomniacForm.Tag = true;
-                    InsomniacForm.TopMost = false;
+                    InsomniacForm.ShowInTaskbar = false;
                 }
             }
         }
@@ -279,7 +275,7 @@ namespace Insomniac
                 (lastInput == 3))
             {
                 Input.type = 1; // 1 = Keyboard Input
-                Input.U.ki.wScan = ScanCodeShort.F15;
+                Input.U.ki.wScan = ScanCodeShort.F1;
                 Input.U.ki.dwFlags = KEYEVENTF.SCANCODE;
                 Inputs[0] = Input;
 
@@ -289,7 +285,7 @@ namespace Insomniac
             if (lastInput == 0)
             {
                 Input.type = 1; // 1 = Keyboard Input
-                Input.U.ki.wScan = ScanCodeShort.F16;
+                Input.U.ki.wScan = ScanCodeShort.F2;
                 Input.U.ki.dwFlags = KEYEVENTF.SCANCODE;
                 Inputs[1] = Input;
 
@@ -299,7 +295,7 @@ namespace Insomniac
             if (lastInput == 1)
             {
                 Input.type = 1; // 1 = Keyboard Input
-                Input.U.ki.wScan = ScanCodeShort.F17;
+                Input.U.ki.wScan = ScanCodeShort.F3;
                 Input.U.ki.dwFlags = KEYEVENTF.SCANCODE;
                 Inputs[2] = Input;
 
@@ -309,7 +305,7 @@ namespace Insomniac
             if (lastInput == 2)
             {
                 Input.type = 1; // 1 = Keyboard Input
-                Input.U.ki.wScan = ScanCodeShort.SHIFT;
+                Input.U.ki.wScan = ScanCodeShort.F4;
                 Input.U.ki.dwFlags = KEYEVENTF.SCANCODE;
                 Inputs[3] = Input;
 
@@ -319,6 +315,18 @@ namespace Insomniac
             UserInput.SendInput(1, Inputs, INPUT.Size);
 
             inputDate = DateTime.Now;
+        }
+
+        public void SystemEvents_SessionSwitch(object sender, SessionSwitchEventArgs e)
+        {
+            if (e.Reason == SessionSwitchReason.SessionLock)
+            {
+                DisableMonitoring("Disabling...");
+            }
+            else if (e.Reason == SessionSwitchReason.SessionUnlock)
+            {
+                StartMonitoring("Starting...");
+            }
         }
 
         public void ShowIdleTime(object formObject)
@@ -332,11 +340,7 @@ namespace Insomniac
                     if ((idleTime >= Settings.Default.IdleTimeThreshold) &&
                         ((bool)InsomniacForm.Tag == false))
                     {
-                        if (this.Visible == false)
-                        {
-                            ShowWindow(InsomniacForm);
-                        }
-
+                        ShowWindow(InsomniacForm);
                         SendInput();
                         Thread.Sleep(Settings.Default.InputFrequency);
                     }
@@ -344,7 +348,7 @@ namespace Insomniac
             }
             catch (Exception ex)
             {
-                WriteStatusLog(DateTime.Now.ToString() + " Error occured in ShowWindow\r\n");
+                WriteStatusLog(DateTime.Now.ToString() + " Error occured in ShowIdleTime\r\n");
 
                 if ((ex.InnerException is ThreadInterruptedException) == false)
                 {
@@ -357,38 +361,45 @@ namespace Insomniac
         {
             try
             {
-                bool inIdleState = false;
                 int focusInterval = 0;
+                bool inIdleState = false;
                 DateTime idleStartTimestamp = DateTime.Now;
-                Label InsomniacLabel = (Label)formObject;
+                Insomniac InsomniacForm = (Insomniac)formObject;
+                Label InsomniacLabel = (Label)InsomniacForm.Controls["lblInsomniac"];
 
                 while (killThreads == false)
                 {
-                    if ((bool)this.Tag == true)
+                    if ((idleTime < Settings.Default.IdleTimeThreshold) &&
+                        (DateTime.Now.AddSeconds(-idleTime - Settings.Default.IdleTimeError) > inputDate) &&
+                        ((bool)InsomniacForm.Tag == true))
                     {
-                        if (inIdleState == false)
-                        {
-                            inIdleState = true;
-                            idleStartTimestamp = DateTime.Now;
-                            Settings.Default.ErrorLog += DateTime.Now.ToString() + " Idle time started...\r\n";
-
-                            WriteStatusLog(DateTime.Now.ToString() + " Idle time started...\r\n");
-                        }
-
-                        focusInterval++;
-
-                        if (focusInterval == Settings.Default.FocusInterval)
-                        {
-                            focusInterval = 0;
-
-                            ShowWindow((Insomniac)InsomniacLabel.FindForm());
-                        }
-
-                        UpdateLabel(InsomniacLabel, (DateTime.Now.Subtract(idleStartTimestamp)).ToString(@"hh\:mm\:ss"));
+                        HideWindow(InsomniacForm);
                     }
                     else
                     {
-                        if (inIdleState == true)
+                        if ((bool)InsomniacForm.Tag == true)
+                        {
+                            if (inIdleState == false)
+                            {
+                                inIdleState = true;
+                                idleStartTimestamp = DateTime.Now;
+                                Settings.Default.ErrorLog += DateTime.Now.ToString() + " Idle time started...\r\n";
+
+                                WriteStatusLog(DateTime.Now.ToString() + " Idle time started...\r\n");
+                            }
+
+                            focusInterval++;
+
+                            if (focusInterval == Settings.Default.FocusInterval)
+                            {
+                                focusInterval = 0;
+
+                                ShowWindow((Insomniac)InsomniacLabel.FindForm());
+                            }
+
+                            UpdateLabel(InsomniacLabel, (DateTime.Now.Subtract(idleStartTimestamp)).ToString(@"hh\:mm\:ss"));
+                        }
+                        else if (inIdleState == true)
                         {
                             focusInterval = 0;
                             inIdleState = false;
@@ -407,35 +418,6 @@ namespace Insomniac
             catch (Exception ex)
             {
                 WriteStatusLog(DateTime.Now.ToString() + " Error occured in UpdateIdleTime\r\n");
-
-                if ((ex.InnerException is ThreadInterruptedException) == false)
-                {
-                    Settings.Default.ErrorLog += ex.ToString();
-                }
-            }
-        }
-
-        public void HideIdleTime(object formObject)
-        {
-            try
-            {
-                Insomniac InsomniacForm = (Insomniac)formObject;
-
-                while (killThreads == false)
-                {
-                    if ((idleTime < Settings.Default.IdleTimeThreshold) &&
-                        (DateTime.Now.AddSeconds(-idleTime - Settings.Default.IdleTimeError) > inputDate) &&
-                        ((bool)InsomniacForm.Tag == true))
-                    {
-                        HideWindow(InsomniacForm);
-
-                        Thread.Sleep(Settings.Default.HideWindowIdleTimeFrequency);
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                WriteStatusLog(DateTime.Now.ToString() + " Error occured in HideWindow\r\n");
 
                 if ((ex.InnerException is ThreadInterruptedException) == false)
                 {

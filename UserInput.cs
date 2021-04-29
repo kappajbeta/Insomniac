@@ -14,7 +14,10 @@ namespace Insomniac
         [DllImport("user32.dll", EntryPoint = "SetCursorPos")]
         [return: MarshalAs(UnmanagedType.Bool)]
         internal static extern bool SetCursorPos(int x, int y);
-        
+
+        [DllImport("User32.dll")]
+        public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
         [DllImport("User32.dll")]
         public static extern Int32 SetForegroundWindow(int hWnd);
 

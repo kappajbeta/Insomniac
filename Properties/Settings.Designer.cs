@@ -49,7 +49,7 @@ namespace Insomniac.Properties {
         
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("60000")]
+        [global::System.Configuration.DefaultSettingValueAttribute("30000")]
         public int InputFrequency {
             get {
                 return ((int)(this["InputFrequency"]));
